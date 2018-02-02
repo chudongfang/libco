@@ -311,20 +311,22 @@ struct stTimeoutItemLink_t;
 struct stTimeoutItem_t;
 struct stCoEpoll_t
 {
-	int iEpollFd;
-	static const int _EPOLL_SIZE = 1024 * 10;
+	int iEpollFd; //epoll 实例的文件描述符
+	static const int _EPOLL_SIZE = 1024 * 10;//一次 epoll_wait 最多返回的就绪事件个数
 
-	struct stTimeout_t *pTimeout;
+	struct stTimeout_t *pTimeout;//时间轮(Timingwheel)定时器
 
-	struct stTimeoutItemLink_t *pstTimeoutList;
+	struct stTimeoutItemLink_t *pstTimeoutList;//该指针实际上是一个链表头。链表用于临时存放超时事件的 item
 
-	struct stTimeoutItemLink_t *pstActiveList;
+	struct stTimeoutItemLink_t *pstActiveList;//也是指向一个链表。该链表用于存放 epoll_wait 得到的就绪事件和定时器超时事件
 
-	co_epoll_res *result; 
+	co_epoll_res *result;  //第二个参数的封装,即一次 epoll_wait 得到的结果集
 
 };
 typedef void (*OnPreparePfn_t)( stTimeoutItem_t *,struct epoll_event &ev, stTimeoutItemLink_t *active );
 typedef void (*OnProcessPfn_t)( stTimeoutItem_t *);
+
+//链表块结构
 struct stTimeoutItem_t
 {
 
@@ -770,14 +772,14 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 
 	for(;;)
 	{
-		int ret = co_epoll_wait( ctx->iEpollFd,result,stCoEpoll_t::_EPOLL_SIZE, 1 );
+		int ret = co_epoll_wait( ctx->iEpollFd,result,stCoEpoll_t::_EPOLL_SIZE, 1 );//调用 epoll_wait() 等待 I/O 就绪事件
 
 		stTimeoutItemLink_t *active = (ctx->pstActiveList);
 		stTimeoutItemLink_t *timeout = (ctx->pstTimeoutList);
 
 		memset( timeout,0,sizeof(stTimeoutItemLink_t) );
 
-		for(int i=0;i<ret;i++)
+		for(int i=0;i<ret;i++)//处理就绪的文件描述符
 		{
 			stTimeoutItem_t *item = (stTimeoutItem_t*)result->events[i].data.ptr;
 			if( item->pfnPrepare )
@@ -792,8 +794,10 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 
 
 		unsigned long long now = GetTickMS();
-		TakeAllTimeout( ctx->pTimeout,now,timeout );
+		TakeAllTimeout( ctx->pTimeout,now,timeout );//从时间轮上取出已超时的事件,放到 timeout 队列
 
+
+        //遍历 timeout 队列,设置事件已超时标志
 		stTimeoutItem_t *lp = timeout->head;
 		while( lp )
 		{
@@ -802,8 +806,12 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 			lp = lp->pNext;
 		}
 
+        //将 timeout 队列中事件合并到 active 队列
 		Join<stTimeoutItem_t,stTimeoutItemLink_t>( active,timeout );
 
+
+        //遍历 active 队列,调用工作协程设置的 pfnProcess() 回调函数 resume
+        //挂起的工作协程,处理对应的 I/O 或超时事件
 		lp = active->head;
 		while( lp )
 		{

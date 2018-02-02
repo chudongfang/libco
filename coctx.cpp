@@ -128,6 +128,8 @@ int coctx_make( coctx_t *ctx,coctx_pfn_t pfn,const void *s,const void *s1 )
 	return 0;
 }
 
+
+//初始化coctx
 int coctx_init( coctx_t *ctx )
 {
 	memset( ctx,0,sizeof(*ctx));
