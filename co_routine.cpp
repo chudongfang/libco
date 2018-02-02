@@ -50,11 +50,11 @@ struct stCoEpoll_t;
 
 struct stCoRoutineEnv_t
 {
-	stCoRoutine_t *pCallStack[ 128 ];
-	int iCallStackSize;
+	stCoRoutine_t *pCallStack[ 128 ]; //保存调用链
+	int iCallStackSize;               //栈指针
 	stCoEpoll_t *pEpoll;
 
-	//for copy stack log lastco and nextco
+	//for copy stack log lastco and nextco //共享栈
 	stCoRoutine_t* pending_co;
 	stCoRoutine_t* occupy_co;
 };
@@ -547,22 +547,26 @@ void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co);
 void co_resume( stCoRoutine_t *co )
 {
 	stCoRoutineEnv_t *env = co->env;
-	stCoRoutine_t *lpCurrRoutine = env->pCallStack[ env->iCallStackSize - 1 ];
-	if( !co->cStart )
+	stCoRoutine_t *lpCurrRoutine = env->pCallStack[ env->iCallStackSize - 1 ]; //取当前协程块指针
+	if( !co->cStart ) //协程首次执行
 	{
 		coctx_make( &co->ctx,(coctx_pfn_t)CoRoutineFunc,co,0 );
 		co->cStart = 1;
 	}
-	env->pCallStack[ env->iCallStackSize++ ] = co;
-	co_swap( lpCurrRoutine, co );
+	env->pCallStack[ env->iCallStackSize++ ] = co;//将新协程块指针压入pCallStack栈中
 
+	co_swap( lpCurrRoutine, co );                 //切换到co指向的新协程去执行
+    
+    //阻塞,并行执行
+    //co_swap() 不会就此返回,而是要这次 resume 的 co 协程主动
+    //yield 让出 CPU 时才会返回到 co_resume() 中来
 
 }
 void co_yield_env( stCoRoutineEnv_t *env )
 {
 	
-	stCoRoutine_t *last = env->pCallStack[ env->iCallStackSize - 2 ];
-	stCoRoutine_t *curr = env->pCallStack[ env->iCallStackSize - 1 ];
+	stCoRoutine_t *last = env->pCallStack[ env->iCallStackSize - 2 ]; //获取上一个协程块
+	stCoRoutine_t *curr = env->pCallStack[ env->iCallStackSize - 1 ]; //获取当前协程块
 
 	env->iCallStackSize--;
 
@@ -722,6 +726,7 @@ void co_init_curr_thread_env()
 	stCoEpoll_t *ev = AllocEpoll();
 	SetEpoll( env,ev );
 }
+
 stCoRoutineEnv_t *co_get_curr_thread_env()
 {
 	return g_arrCoEnvPerThread[ GetPid() ];

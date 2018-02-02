@@ -71,8 +71,8 @@ int main()
 	env->cond = co_cond_alloc();
 
 	stCoRoutine_t* consumer_routine;
-	co_create(&consumer_routine, NULL, Consumer, env);
-	co_resume(consumer_routine);
+	co_create(&consumer_routine, NULL, Consumer, env);//创建
+	co_resume(consumer_routine); //运行
 
 	stCoRoutine_t* producer_routine;
 	co_create(&producer_routine, NULL, Producer, env);

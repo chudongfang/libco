@@ -45,13 +45,14 @@ struct stShareStack_t
 };
 
 
-
+//协程控制块
 struct stCoRoutine_t
 {
-	stCoRoutineEnv_t *env;
-	pfn_co_routine_t pfn;
-	void *arg;
-	coctx_t ctx;
+    
+	stCoRoutineEnv_t *env; //属于一个协程所有协程的执行环境 
+	pfn_co_routine_t pfn;  //待执行的协程函数
+	void *arg;             //待执行的协程函数的参数
+	coctx_t ctx;           //用于协程切换时保存CPU上下文的
 
 	char cStart;
 	char cEnd;
@@ -59,10 +60,10 @@ struct stCoRoutine_t
 	char cEnableSysHook;
 	char cIsShareStack;
 
-	void *pvEnv;
+	void *pvEnv;          //保持系统环境变量
 
 	//char sRunStack[ 1024 * 128 ];
-	stStackMem_t* stack_mem;
+	stStackMem_t* stack_mem; //协程运行时的栈内存
 
 
 	//save satck buffer while confilct on same stack_buffer;
