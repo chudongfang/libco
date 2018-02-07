@@ -25,9 +25,12 @@
 
 //1.struct
 
+//协程控制块
 struct stCoRoutine_t;
 struct stShareStack_t;
 
+
+//协程参数
 struct stCoRoutineAttr_t
 {
 	int stack_size;
@@ -45,6 +48,7 @@ typedef void *(*pfn_co_routine_t)( void * );
 
 //2.co_routine
 
+//创建协程
 int 	co_create( stCoRoutine_t **co,const stCoRoutineAttr_t *attr,void *(*routine)(void*),void *arg );
 void    co_resume( stCoRoutine_t *co );
 void    co_yield( stCoRoutine_t *co );

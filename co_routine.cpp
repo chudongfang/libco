@@ -459,7 +459,8 @@ static int CoRoutineFunc( stCoRoutine_t *co,void * )
 }
 
 
-
+//创建协程块
+//对协程块进行一些初始化工作
 struct stCoRoutine_t *co_create_env( stCoRoutineEnv_t * env, const stCoRoutineAttr_t* attr,
 		pfn_co_routine_t pfn,void *arg )
 {
@@ -520,6 +521,7 @@ struct stCoRoutine_t *co_create_env( stCoRoutineEnv_t * env, const stCoRoutineAt
 	return lp;
 }
 
+//创建协程块
 int co_create( stCoRoutine_t **ppco,const stCoRoutineAttr_t *attr,pfn_co_routine_t pfn,void *arg )
 {
 	if( !co_get_curr_thread_env() ) 
