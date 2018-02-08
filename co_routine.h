@@ -76,6 +76,7 @@ void 	co_disable_hook_sys();
 bool 	co_is_enable_sys_hook();
 
 //6.sync
+//条件变量
 struct stCoCond_t;
 
 stCoCond_t *co_cond_alloc();
@@ -86,6 +87,7 @@ int co_cond_broadcast( stCoCond_t * );
 int co_cond_timedwait( stCoCond_t *,int timeout_ms );
 
 //7.share stack
+//共享栈
 stShareStack_t* co_alloc_sharestack(int iCount, int iStackSize);
 
 //8.init envlist for hook get/set env

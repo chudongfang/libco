@@ -150,6 +150,7 @@ static pid_t GetPid()
 	return p ? *(pid_t*)(p + 18) : getpid();
 }
 */
+//从链表中移除节点
 template <class T,class TLink>
 void RemoveFromLink(T *ap)
 {
@@ -190,6 +191,8 @@ void RemoveFromLink(T *ap)
 	ap->pLink = NULL;
 }
 
+
+//把ap 加到aplink链表中
 template <class TNode,class TLink>
 void inline AddTail(TLink*apLink,TNode *ap)
 {
@@ -212,6 +215,7 @@ void inline AddTail(TLink*apLink,TNode *ap)
 	ap->pLink = apLink;
 }
 
+//删除链表头结点
 template <class TNode,class TLink>
 void inline PopHead( TLink*apLink )
 {
@@ -238,6 +242,7 @@ void inline PopHead( TLink*apLink )
 	}
 }
 
+//把apOther加入到apLink中
 template <class TNode,class TLink>
 void inline Join( TLink*apLink,TLink *apOther )
 {
@@ -329,7 +334,7 @@ struct stCoEpoll_t
 typedef void (*OnPreparePfn_t)( stTimeoutItem_t *,struct epoll_event &ev, stTimeoutItemLink_t *active );
 typedef void (*OnProcessPfn_t)( stTimeoutItem_t *);
 
-//链表块结构
+//双向链表块结构
 struct stTimeoutItem_t
 {
 
@@ -337,17 +342,17 @@ struct stTimeoutItem_t
 	{
 		eMaxTimeout = 40 * 1000 //40s
 	};
-	stTimeoutItem_t *pPrev;
-	stTimeoutItem_t *pNext;
-	stTimeoutItemLink_t *pLink;
+	stTimeoutItem_t *pPrev;//指向前一个节点
+	stTimeoutItem_t *pNext;//指向后一个节点
+	stTimeoutItemLink_t *pLink;//指向链表头节点和链表尾节点
 
 	unsigned long long ullExpireTime;
 
 	OnPreparePfn_t pfnPrepare;
 	OnProcessPfn_t pfnProcess;
 
-	void *pArg; // routine 
-	bool bTimeout;
+	void *pArg; // routine  
+	bool bTimeout; //是否超时
 };
 struct stTimeoutItemLink_t
 {
@@ -355,6 +360,8 @@ struct stTimeoutItemLink_t
 	stTimeoutItem_t *tail;
 
 };
+
+//封装一个双向链表
 struct stTimeout_t
 {
 	stTimeoutItemLink_t *pItems;
@@ -363,6 +370,9 @@ struct stTimeout_t
 	unsigned long long ullStart;
 	long long llStartIdx;
 };
+
+
+//创建一个固定大小的双向链表
 stTimeout_t *AllocTimeout( int iSize )
 {
 	stTimeout_t *lp = (stTimeout_t*)calloc( 1,sizeof(stTimeout_t) );	
@@ -375,6 +385,8 @@ stTimeout_t *AllocTimeout( int iSize )
 
 	return lp;
 }
+
+//释放一个双向链表
 void FreeTimeout( stTimeout_t *apTimeout )
 {
 	free( apTimeout->pItems );
@@ -415,6 +427,7 @@ int AddTimeout( stTimeout_t *apTimeout,stTimeoutItem_t *apItem ,unsigned long lo
 
 	return 0;
 }
+
 inline void TakeAllTimeout( stTimeout_t *apTimeout,unsigned long long allNow,stTimeoutItemLink_t *apResult )
 {
 	if( apTimeout->ullStart == 0 )
@@ -446,6 +459,8 @@ inline void TakeAllTimeout( stTimeout_t *apTimeout,unsigned long long allNow,stT
 
 
 }
+
+//执行协程中的函数
 static int CoRoutineFunc( stCoRoutine_t *co,void * )
 {
 	if( co->pfn )
@@ -462,6 +477,9 @@ static int CoRoutineFunc( stCoRoutine_t *co,void * )
 }
 
 
+
+
+//--------------------------------------------------------------------
 //创建协程块
 //对协程块进行一些初始化工作
 struct stCoRoutine_t *co_create_env( stCoRoutineEnv_t * env, const stCoRoutineAttr_t* attr,
@@ -766,6 +784,9 @@ void OnPollPreparePfn( stTimeoutItem_t * ap,struct epoll_event &e,stTimeoutItemL
 }
 
 
+
+//EvenLoop为协程的调度器,类比与线程,线程调度由操作系统的内核实现
+//而协程的调度则由eventloop实现
 void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 {
 	if( !ctx->result )
@@ -778,6 +799,8 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 
 	for(;;)
 	{
+
+        //其相当与直接用epoll实现的定时器
         //一个1ms超时的短时间blocking调用
 		int ret = co_epoll_wait( ctx->iEpollFd,result,stCoEpoll_t::_EPOLL_SIZE, 1 );//调用 epoll_wait() 等待 I/O 就绪事件
         
@@ -907,6 +930,8 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	{
 		return pollfunc(fds, nfds, timeout);
 	}
+
+    //timeout小于0时,其就相当与设置为无线等待
 	if (timeout < 0)
 	{
 		timeout = INT_MAX;
@@ -1083,6 +1108,8 @@ stCoRoutine_t *co_self()
 }
 
 //co cond
+//
+//条件变量
 struct stCoCond_t;
 struct stCoCondItem_t 
 {

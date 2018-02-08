@@ -47,6 +47,8 @@ struct task_t
 	struct sockaddr_in addr;
 };
 
+
+//设置非阻塞Socket
 static int SetNonBlock(int iSock)
 {
     int iFlags;
@@ -59,7 +61,7 @@ static int SetNonBlock(int iSock)
 }
 
 
-
+//设置地址
 static void SetAddr(const char *pszIP,const unsigned short shPort,struct sockaddr_in &addr)
 {
 	bzero(&addr,sizeof(addr));
@@ -81,6 +83,7 @@ static void SetAddr(const char *pszIP,const unsigned short shPort,struct sockadd
 
 }
 
+//创建socket
 static int CreateTcpSocket(const unsigned short shPort  = 0 ,const char *pszIP  = "*" ,bool bReuse  = false )
 {
 	int fd = socket(AF_INET,SOCK_STREAM, IPPROTO_TCP);
@@ -106,6 +109,8 @@ static int CreateTcpSocket(const unsigned short shPort  = 0 ,const char *pszIP  
 	return fd;
 }
 
+
+
 static void *poll_routine( void *arg )
 {
 	co_enable_hook_sys();
@@ -116,7 +121,7 @@ static void *poll_routine( void *arg )
 		int fd = CreateTcpSocket();
 		SetNonBlock( fd );
 		v[i].fd = fd;
-
+        //向这四个端口进行连接
 		int ret = connect(fd,(struct sockaddr*)&v[i].addr,sizeof( v[i].addr )); 
 		printf("co %p connect i %ld ret %d errno %d (%s)\n",
 			co_self(),i,ret,errno,strerror(errno));
@@ -132,9 +137,13 @@ static void *poll_routine( void *arg )
 	size_t iWaitCnt = v.size();
 	for(;;)
 	{
+        //poll等待,设置超时时间为1s 其监听pf中的socket
+        //其实是内部是调用的epoll,并注册时间
 		int ret = poll( pf,iWaitCnt,1000 );
-		printf("co %p poll wait %ld ret %d\n",
+
+        printf("co %p: poll wait: %ld ret :%d\n",
 				co_self(),iWaitCnt,ret);
+
 		for(int i=0;i<ret;i++)
 		{
 			printf("co %p fire fd %d revents 0x%X POLLOUT 0x%X POLLERR 0x%X POLLHUP 0x%X\n",
@@ -172,11 +181,12 @@ static void *poll_routine( void *arg )
 		close( v[i].fd );
 		v[i].fd = -1;
 	}
-
+    printf("The end\n");
 	printf("co %p task cnt %ld fire %ld\n",
 			co_self(),v.size(),setRaiseFds.size() );
 	return 0;
 }
+
 int main(int argc,char *argv[])
 {
 	vector<task_t> v;
