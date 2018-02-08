@@ -553,6 +553,8 @@ int co_create( stCoRoutine_t **ppco,const stCoRoutineAttr_t *attr,pfn_co_routine
 	*ppco = co;
 	return 0;
 }
+
+//释放协程块
 void co_free( stCoRoutine_t *co )
 {
     if (!co->cIsShareStack) 
@@ -562,11 +564,15 @@ void co_free( stCoRoutine_t *co )
     }   
     free( co );
 }
+
+
+//释放协程块
 void co_release( stCoRoutine_t *co )
 {
     co_free( co );
 }
 
+//切换两个协程执行
 void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co);
 
 void co_resume( stCoRoutine_t *co )
