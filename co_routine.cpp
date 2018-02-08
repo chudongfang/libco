@@ -746,6 +746,7 @@ static short EpollEvent2Poll( uint32_t events )
 	return e;
 }
 
+//全局变量,存储不同线程的的协程状态
 static stCoRoutineEnv_t* g_arrCoEnvPerThread[ 204800 ] = { 0 };
 void co_init_curr_thread_env()
 {
@@ -768,16 +769,22 @@ void co_init_curr_thread_env()
 	SetEpoll( env,ev );
 }
 
+//得到当前线程的协程环境
 stCoRoutineEnv_t *co_get_curr_thread_env()
 {
 	return g_arrCoEnvPerThread[ GetPid() ];
 }
 
+
+//启动超时协程
 void OnPollProcessEvent( stTimeoutItem_t * ap )
 {
 	stCoRoutine_t *co = (stCoRoutine_t*)ap->pArg;
 	co_resume( co );
 }
+
+
+
 
 void OnPollPreparePfn( stTimeoutItem_t * ap,struct epoll_event &e,stTimeoutItemLink_t *active )
 {
