@@ -593,6 +593,8 @@ void co_resume( stCoRoutine_t *co )
     //yield 让出 CPU 时才会返回到 co_resume() 中来
 
 }
+
+//退出当前协程
 void co_yield_env( stCoRoutineEnv_t *env )
 {
 	
@@ -604,15 +606,21 @@ void co_yield_env( stCoRoutineEnv_t *env )
 	co_swap( curr, last);
 }
 
+//退出当前线程中的协程
 void co_yield_ct()
 {
 
 	co_yield_env( co_get_curr_thread_env() );
 }
+
+
+//退出当前协程
 void co_yield( stCoRoutine_t *co )
 {
 	co_yield_env( co->env );
 }
+
+
 
 void save_stack_buffer(stCoRoutine_t* occupy_co)
 {
@@ -631,6 +639,8 @@ void save_stack_buffer(stCoRoutine_t* occupy_co)
 	memcpy(occupy_co->save_buffer, occupy_co->stack_sp, len);
 }
 
+
+//交换执行两个协程
 void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co)
 {
  	stCoRoutineEnv_t* env = co_get_curr_thread_env();
