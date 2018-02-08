@@ -31,6 +31,7 @@ struct stEnv_t
 	stCoCond_t* cond;
 	queue<stTask_t*> task_queue;
 };
+//生产者
 void* Producer(void* args)
 {
 	co_enable_hook_sys();
@@ -47,6 +48,8 @@ void* Producer(void* args)
 	}
 	return NULL;
 }
+
+//消费者
 void* Consumer(void* args)
 {
 	co_enable_hook_sys();

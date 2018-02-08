@@ -99,6 +99,8 @@ static unsigned long long getCpuKhz()
 }
 #endif
 
+
+//得到当前时间
 static unsigned long long GetTickMS()
 {
 #if defined( __LIBCO_RDTSCP__) 
@@ -209,6 +211,7 @@ void inline AddTail(TLink*apLink,TNode *ap)
 	}
 	ap->pLink = apLink;
 }
+
 template <class TNode,class TLink>
 void inline PopHead( TLink*apLink )
 {
@@ -769,15 +772,20 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 	{
 		ctx->result =  co_epoll_res_alloc( stCoEpoll_t::_EPOLL_SIZE );
 	}
+    //co_epoll_res epoll的返回结果
 	co_epoll_res *result = ctx->result;
 
 
 	for(;;)
 	{
+        //一个1ms超时的短时间blocking调用
 		int ret = co_epoll_wait( ctx->iEpollFd,result,stCoEpoll_t::_EPOLL_SIZE, 1 );//调用 epoll_wait() 等待 I/O 就绪事件
-
+        
+        //有活动的事件链表
 		stTimeoutItemLink_t *active = (ctx->pstActiveList);
-		stTimeoutItemLink_t *timeout = (ctx->pstTimeoutList);
+		
+        //超时链表
+        stTimeoutItemLink_t *timeout = (ctx->pstTimeoutList);
 
 		memset( timeout,0,sizeof(stTimeoutItemLink_t) );
 
