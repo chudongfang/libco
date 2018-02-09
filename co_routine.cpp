@@ -331,10 +331,12 @@ struct stCoEpoll_t
 	co_epoll_res *result;  //第二个参数的封装,即一次 epoll_wait 得到的结果集
 
 };
+
 typedef void (*OnPreparePfn_t)( stTimeoutItem_t *,struct epoll_event &ev, stTimeoutItemLink_t *active );
 typedef void (*OnProcessPfn_t)( stTimeoutItem_t *);
 
-//双向链表块结构
+//双向链表块
+//表示一个超时事件
 struct stTimeoutItem_t
 {
 
@@ -931,6 +933,8 @@ stCoEpoll_t *AllocEpoll()
 	return ctx;
 }
 
+
+//删除epoll对应的节点
 void FreeEpoll( stCoEpoll_t *ctx )
 {
 	if( ctx )
@@ -943,10 +947,13 @@ void FreeEpoll( stCoEpoll_t *ctx )
 	free( ctx );
 }
 
+//得到当前执行的协程块
 stCoRoutine_t *GetCurrCo( stCoRoutineEnv_t *env )
 {
 	return env->pCallStack[ env->iCallStackSize - 1 ];
 }
+
+//得到当前执行的协程块
 stCoRoutine_t *GetCurrThreadCo( )
 {
 	stCoRoutineEnv_t *env = co_get_curr_thread_env();
@@ -956,6 +963,14 @@ stCoRoutine_t *GetCurrThreadCo( )
 
 
 
+
+
+//得到epoll事件
+//其供co_poll/poll调用
+//其内部调用epoll监听
+//
+//
+//
 typedef int (*poll_pfn_t)(struct pollfd fds[], nfds_t nfds, int timeout);
 int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeout, poll_pfn_t pollfunc)
 {
@@ -964,12 +979,14 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 		return pollfunc(fds, nfds, timeout);
 	}
 
-    //timeout小于0时,其就相当与设置为无线等待
+    //timeout小于0时,其就相当与设置为无限等待
 	if (timeout < 0)
 	{
 		timeout = INT_MAX;
 	}
 	int epfd = ctx->iEpollFd;
+
+    //当前的协程块
 	stCoRoutine_t* self = co_self();
 
 	//1.struct change
@@ -994,7 +1011,7 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	arg.pfnProcess = OnPollProcessEvent;
 	arg.pArg = GetCurrCo( co_get_curr_thread_env() );
 	
-	
+    //把要监听的socket加入epoll,让epoll监听	
 	//2. add epoll
 	for(nfds_t i=0;i<nfds;i++)
 	{
@@ -1072,6 +1089,7 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	return iRaiseCnt;
 }
 
+
 int	co_poll( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeout_ms )
 {
 	return co_poll_inner(ctx, fds, nfds, timeout_ms, NULL);
@@ -1089,6 +1107,8 @@ stCoEpoll_t *co_get_epoll_ct()
 	}
 	return co_get_curr_thread_env()->pEpoll;
 }
+
+
 struct stHookPThreadSpec_t
 {
 	stCoRoutine_t *co;
@@ -1143,6 +1163,7 @@ stCoRoutine_t *co_self()
 //co cond
 //
 //条件变量
+//每个条件变量节点里面都包含一个stTimeoutItem_t
 struct stCoCond_t;
 struct stCoCondItem_t 
 {
@@ -1150,13 +1171,17 @@ struct stCoCondItem_t
 	stCoCondItem_t *pNext;
 	stCoCond_t *pLink;
 
-	stTimeoutItem_t timeout;
+	stTimeoutItem_t timeout; //一个超时事件
 };
+
+//表示条件变量的列表
 struct stCoCond_t
 {
 	stCoCondItem_t *head;
 	stCoCondItem_t *tail;
 };
+
+//唤醒当前的协程块
 static void OnSignalProcessEvent( stTimeoutItem_t * ap )
 {
 	stCoRoutine_t *co = (stCoRoutine_t*)ap->pArg;
@@ -1164,6 +1189,11 @@ static void OnSignalProcessEvent( stTimeoutItem_t * ap )
 }
 
 stCoCondItem_t *co_cond_pop( stCoCond_t *link );
+
+
+
+//把条件变量取出,并把其中的超时事件删除,移入活动事件中 
+
 int co_cond_signal( stCoCond_t *si )
 {
 	stCoCondItem_t * sp = co_cond_pop( si );
@@ -1177,6 +1207,9 @@ int co_cond_signal( stCoCond_t *si )
 
 	return 0;
 }
+
+
+
 int co_cond_broadcast( stCoCond_t *si )
 {
 	for(;;)
@@ -1193,17 +1226,20 @@ int co_cond_broadcast( stCoCond_t *si )
 }
 
 
+
+//
 int co_cond_timedwait( stCoCond_t *link,int ms )
 {
+    //创建一个条件变量
 	stCoCondItem_t* psi = (stCoCondItem_t*)calloc(1, sizeof(stCoCondItem_t));
-	psi->timeout.pArg = GetCurrThreadCo();
-	psi->timeout.pfnProcess = OnSignalProcessEvent;
+	psi->timeout.pArg = GetCurrThreadCo();  //保持当前的协程
+	psi->timeout.pfnProcess = OnSignalProcessEvent;//协程函数
 
 	if( ms > 0 )
 	{
 		unsigned long long now = GetTickMS();
 		psi->timeout.ullExpireTime = now + ms;
-
+        //设置超时时间
 		int ret = AddTimeout( co_get_curr_thread_env()->pEpoll->pTimeout,&psi->timeout,now );
 		if( ret != 0 )
 		{
@@ -1215,16 +1251,22 @@ int co_cond_timedwait( stCoCond_t *link,int ms )
 
 	co_yield_ct();
 
-
 	RemoveFromLink<stCoCondItem_t,stCoCond_t>( psi );
 	free(psi);
 
 	return 0;
 }
+
+
+
+//创建一个条件变量
 stCoCond_t *co_cond_alloc()
 {
 	return (stCoCond_t*)calloc( 1,sizeof(stCoCond_t) );
 }
+
+
+//释放一个条件变量
 int co_cond_free( stCoCond_t * cc )
 {
 	free( cc );
@@ -1232,6 +1274,7 @@ int co_cond_free( stCoCond_t * cc )
 }
 
 
+//从条件变量中删除头节点并返回
 stCoCondItem_t *co_cond_pop( stCoCond_t *link )
 {
 	stCoCondItem_t *p = link->head;
@@ -1241,3 +1284,11 @@ stCoCondItem_t *co_cond_pop( stCoCond_t *link )
 	}
 	return p;
 }
+
+
+
+
+
+
+
+
