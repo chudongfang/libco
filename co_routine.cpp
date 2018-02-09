@@ -351,7 +351,7 @@ struct stTimeoutItem_t
 	OnPreparePfn_t pfnPrepare;
 	OnProcessPfn_t pfnProcess;
 
-	void *pArg; // routine  
+	void *pArg; // routine  指向一个协程块 
 	bool bTimeout; //是否超时
 };
 struct stTimeoutItemLink_t
@@ -575,6 +575,8 @@ void co_release( stCoRoutine_t *co )
 //切换两个协程执行
 void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co);
 
+
+//执行协程
 void co_resume( stCoRoutine_t *co )
 {
 	stCoRoutineEnv_t *env = co->env;
@@ -707,6 +709,7 @@ struct stPoll_t : public stTimeoutItem_t
 
 
 };
+
 struct stPollItem_t : public stTimeoutItem_t
 {
 	struct pollfd *pSelf;
@@ -748,6 +751,10 @@ static short EpollEvent2Poll( uint32_t events )
 
 //全局变量,存储不同线程的的协程状态
 static stCoRoutineEnv_t* g_arrCoEnvPerThread[ 204800 ] = { 0 };
+
+
+
+//初始化当前线程的协程环境
 void co_init_curr_thread_env()
 {
 	pid_t pid = GetPid();	
@@ -768,6 +775,7 @@ void co_init_curr_thread_env()
 	stCoEpoll_t *ev = AllocEpoll();
 	SetEpoll( env,ev );
 }
+
 
 //得到当前线程的协程环境
 stCoRoutineEnv_t *co_get_curr_thread_env()
@@ -900,13 +908,15 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 
 	}
 }
+
+//唤醒ap中的协程
 void OnCoroutineEvent( stTimeoutItem_t * ap )
 {
 	stCoRoutine_t *co = (stCoRoutine_t*)ap->pArg;
 	co_resume( co );
 }
 
-
+//创建epoll并分配对应的stCoEpoll结构体
 stCoEpoll_t *AllocEpoll()
 {
 	stCoEpoll_t *ctx = (stCoEpoll_t*)calloc( 1,sizeof(stCoEpoll_t) );
