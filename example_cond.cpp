@@ -44,7 +44,17 @@ void* Producer(void* args)
 		env->task_queue.push(task);
 		printf("%s:%d produce task %d\n", __func__, __LINE__, task->id);
 		co_cond_signal(env->cond);
-		poll(NULL, 0, 1000);
+        stTimeout_t* arg = (stTimeout_t*)calloc(1,sizeof(stTimeout_t));
+        //赋值执行函数,该函数会启动pArg表示的协程
+	    arg.pfnProcess = OnPollProcessEvent;
+    	
+        //得到当前线程的协程环境
+        arg.pArg = GetCurrCo( co_get_curr_thread_env() );
+        unsigned long long now = GetTickMS();
+	    arg.ullExpireTime = now + timeout;
+         AddTimeout( ctx->pTimeout,&arg,now )
+        
+        //poll(NULL, 0, 1000);
 	}
 	return NULL;
 }
@@ -56,6 +66,7 @@ void* Consumer(void* args)
 	stEnv_t* env = (stEnv_t*)args;
 	while (true)
 	{
+        printf("input !\n");
 		if (env->task_queue.empty())
 		{
 			co_cond_timedwait(env->cond, -1);

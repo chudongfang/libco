@@ -150,7 +150,10 @@ static pid_t GetPid()
 	return p ? *(pid_t*)(p + 18) : getpid();
 }
 */
-//从链表中移除节点
+
+//----------------------------一些链表操作函数---------------------------------------------------
+//从链表中移除节本点
+//链表信息存储在该节点中
 template <class T,class TLink>
 void RemoveFromLink(T *ap)
 {
@@ -242,6 +245,7 @@ void inline PopHead( TLink*apLink )
 	}
 }
 
+
 //把apOther加入到apLink中
 template <class TNode,class TLink>
 void inline Join( TLink*apLink,TLink *apOther )
@@ -332,14 +336,17 @@ struct stCoEpoll_t
 
 };
 
+
+
+
+//----------------------------------时间轮-------------------------
 typedef void (*OnPreparePfn_t)( stTimeoutItem_t *,struct epoll_event &ev, stTimeoutItemLink_t *active );
 typedef void (*OnProcessPfn_t)( stTimeoutItem_t *);
 
 //双向链表块
-//表示一个超时事件
+//表示一个定时事件
 struct stTimeoutItem_t
 {
-
 	enum
 	{
 		eMaxTimeout = 40 * 1000 //40s
@@ -347,7 +354,9 @@ struct stTimeoutItem_t
 	stTimeoutItem_t *pPrev;//指向前一个节点
 	stTimeoutItem_t *pNext;//指向后一个节点
 	stTimeoutItemLink_t *pLink;//指向链表头节点和链表尾节点
+    
 
+    //定时事件到期时间
 	unsigned long long ullExpireTime;
 
 	OnPreparePfn_t pfnPrepare;
@@ -356,6 +365,9 @@ struct stTimeoutItem_t
 	void *pArg; // routine  指向一个协程块 
 	bool bTimeout; //是否超时
 };
+
+
+
 struct stTimeoutItemLink_t
 {
 	stTimeoutItem_t *head;
@@ -364,17 +376,23 @@ struct stTimeoutItemLink_t
 };
 
 //封装一个双向链表
+//表示一系列超时事件
 struct stTimeout_t
 {
+    //超时事件的链表
 	stTimeoutItemLink_t *pItems;
-	int iItemSize;
+	//链表大小
+    int iItemSize;
 
+    //开始时间
 	unsigned long long ullStart;
-	long long llStartIdx;
+	
+    //第一个放入的链表ID,其是环形的
+    long long llStartIdx;
 };
 
 
-//创建一个固定大小的双向链表
+//创建一个固定大小的时间轮
 stTimeout_t *AllocTimeout( int iSize )
 {
 	stTimeout_t *lp = (stTimeout_t*)calloc( 1,sizeof(stTimeout_t) );	
@@ -388,19 +406,26 @@ stTimeout_t *AllocTimeout( int iSize )
 	return lp;
 }
 
-//释放一个双向链表
+//释放一个时间轮
 void FreeTimeout( stTimeout_t *apTimeout )
 {
 	free( apTimeout->pItems );
 	free ( apTimeout );
 }
+
+
+
+
+//把定时事件加入时间轮
 int AddTimeout( stTimeout_t *apTimeout,stTimeoutItem_t *apItem ,unsigned long long allNow )
 {
+    //如果时间轮为空,初始化其开始时间
 	if( apTimeout->ullStart == 0 )
 	{
 		apTimeout->ullStart = allNow;
 		apTimeout->llStartIdx = 0;
 	}
+
 	if( allNow < apTimeout->ullStart )
 	{
 		co_log_err("CO_ERR: AddTimeout line %d allNow %llu apTimeout->ullStart %llu",
@@ -408,6 +433,7 @@ int AddTimeout( stTimeout_t *apTimeout,stTimeoutItem_t *apItem ,unsigned long lo
 
 		return __LINE__;
 	}
+
 	if( apItem->ullExpireTime < allNow )
 	{
 		co_log_err("CO_ERR: AddTimeout line %d apItem->ullExpireTime %llu allNow %llu apTimeout->ullStart %llu",
@@ -415,8 +441,10 @@ int AddTimeout( stTimeout_t *apTimeout,stTimeoutItem_t *apItem ,unsigned long lo
 
 		return __LINE__;
 	}
-	unsigned long long diff = apItem->ullExpireTime - apTimeout->ullStart;
 
+	unsigned long long diff = apItem->ullExpireTime - apTimeout->ullStart;
+    //两者相差的时间
+    //决定其放入时间轮的链表位置
 	if( diff >= (unsigned long long)apTimeout->iItemSize )
 	{
 		diff = apTimeout->iItemSize - 1;
@@ -425,13 +453,17 @@ int AddTimeout( stTimeout_t *apTimeout,stTimeoutItem_t *apItem ,unsigned long lo
 
 		//return __LINE__;
 	}
+
+    //加入时间轮
 	AddTail( apTimeout->pItems + ( apTimeout->llStartIdx + diff ) % apTimeout->iItemSize , apItem );
 
 	return 0;
 }
 
+
 inline void TakeAllTimeout( stTimeout_t *apTimeout,unsigned long long allNow,stTimeoutItemLink_t *apResult )
 {
+    //如果时间轮为空,初始化其开始时间
 	if( apTimeout->ullStart == 0 )
 	{
 		apTimeout->ullStart = allNow;
@@ -442,26 +474,30 @@ inline void TakeAllTimeout( stTimeout_t *apTimeout,unsigned long long allNow,stT
 	{
 		return ;
 	}
+    
+    //确定当前时间和事件轮开始事件的差值
 	int cnt = allNow - apTimeout->ullStart + 1;
 	if( cnt > apTimeout->iItemSize )
 	{
 		cnt = apTimeout->iItemSize;
 	}
+
 	if( cnt < 0 )
 	{
 		return;
 	}
+
 	for( int i = 0;i<cnt;i++)
 	{
+        //挨个访问时间轮位置,并把其中的事件全部加入活动时间中
 		int idx = ( apTimeout->llStartIdx + i) % apTimeout->iItemSize;
 		Join<stTimeoutItem_t,stTimeoutItemLink_t>( apResult,apTimeout->pItems + idx  );
 	}
+    //初始化时间轮的开始时间和其开始ID
 	apTimeout->ullStart = allNow;
 	apTimeout->llStartIdx += cnt - 1;
-
-
 }
-
+//-----------------------------------------------------------------
 //执行协程中的函数
 static int CoRoutineFunc( stCoRoutine_t *co,void * )
 {
@@ -695,6 +731,8 @@ void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co)
 
 //int poll(struct pollfd fds[], nfds_t nfds, int timeout);
 // { fd,events,revents }
+//继承定时事件结构体
+//可以看做为一个定时事件
 struct stPollItem_t ;
 struct stPoll_t : public stTimeoutItem_t 
 {
@@ -969,8 +1007,6 @@ stCoRoutine_t *GetCurrThreadCo( )
 //其供co_poll/poll调用
 //其内部调用epoll监听
 //
-//
-//
 typedef int (*poll_pfn_t)(struct pollfd fds[], nfds_t nfds, int timeout);
 int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeout, poll_pfn_t pollfunc)
 {
@@ -1008,8 +1044,11 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	}
 	memset( arg.pPollItems,0,nfds * sizeof(stPollItem_t) );
 
+    //赋值执行函数,该函数会启动pArg表示的协程
 	arg.pfnProcess = OnPollProcessEvent;
-	arg.pArg = GetCurrCo( co_get_curr_thread_env() );
+    	
+    //得到当前线程的协程环境
+    arg.pArg = GetCurrCo( co_get_curr_thread_env() );
 	
     //把要监听的socket加入epoll,让epoll监听	
 	//2. add epoll
@@ -1046,7 +1085,9 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 
 	unsigned long long now = GetTickMS();
 	arg.ullExpireTime = now + timeout;
-	int ret = AddTimeout( ctx->pTimeout,&arg,now );
+	
+    //这里arg会被强转成stTimeoutItem_t*类型,因为stPoll_t继承stTimeoutItem_t
+    int ret = AddTimeout( ctx->pTimeout,&arg,now );
 	int iRaiseCnt = 0;
 	if( ret != 0 )
 	{
@@ -1058,6 +1099,10 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	}
     else
 	{
+        //成功加入时间轮后,其就会退出当期协程
+        printf("-----------------------------------------------\n");
+        printf("Poll 定时事件已经加入时间轮 , 将要退出本协程!\n");
+        printf("-----------------------------------------------\n\n\n");
 		co_yield_env( co_get_curr_thread_env() );
 		iRaiseCnt = arg.iRaiseCnt;
 	}
@@ -1099,6 +1144,7 @@ void SetEpoll( stCoRoutineEnv_t *env,stCoEpoll_t *ev )
 {
 	env->pEpoll = ev;
 }
+
 stCoEpoll_t *co_get_epoll_ct()
 {
 	if( !co_get_curr_thread_env() )
@@ -1128,6 +1174,9 @@ void *co_getspecific(pthread_key_t key)
 	}
 	return co->aSpec[ key ].value;
 }
+
+
+
 int co_setspecific(pthread_key_t key, const void *value)
 {
 	stCoRoutine_t *co = GetCurrThreadCo();
@@ -1171,7 +1220,7 @@ struct stCoCondItem_t
 	stCoCondItem_t *pNext;
 	stCoCond_t *pLink;
 
-	stTimeoutItem_t timeout; //一个超时事件
+	stTimeoutItem_t timeout; //一个定时事件
 };
 
 //表示条件变量的列表
@@ -1192,8 +1241,7 @@ stCoCondItem_t *co_cond_pop( stCoCond_t *link );
 
 
 
-//把条件变量取出,并把其中的超时事件删除,移入活动事件中 
-
+//把条件变量取出,并把其中的定时事件删除,移入活动事件中 
 int co_cond_signal( stCoCond_t *si )
 {
 	stCoCondItem_t * sp = co_cond_pop( si );
@@ -1201,10 +1249,14 @@ int co_cond_signal( stCoCond_t *si )
 	{
 		return 0;
 	}
+    //把定时事件从时间轮中删除
 	RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( &sp->timeout );
 
+    //直接加入到活动事件中
 	AddTail( co_get_curr_thread_env()->pEpoll->pstActiveList,&sp->timeout );
-
+    /*sleep(1);
+    printf("co_cond_signal:退出当前协程\n");
+    co_yield_ct();*/ 
 	return 0;
 }
 
@@ -1227,19 +1279,25 @@ int co_cond_broadcast( stCoCond_t *si )
 
 
 
-//
+//创建一个条件变量,
+//并把定时事件加入时间轮
+//退出当前协程
+//其事件时间到时会返回当前协程
+//在返回该协程时删除条件变量
 int co_cond_timedwait( stCoCond_t *link,int ms )
 {
     //创建一个条件变量
 	stCoCondItem_t* psi = (stCoCondItem_t*)calloc(1, sizeof(stCoCondItem_t));
-	psi->timeout.pArg = GetCurrThreadCo();  //保持当前的协程
-	psi->timeout.pfnProcess = OnSignalProcessEvent;//协程函数
+	psi->timeout.pArg = GetCurrThreadCo();  //保存当前的协程
+	psi->timeout.pfnProcess = OnSignalProcessEvent;//协程函数,该函数会唤醒当前协程
 
 	if( ms > 0 )
 	{
+        //设置超时时间
 		unsigned long long now = GetTickMS();
 		psi->timeout.ullExpireTime = now + ms;
-        //设置超时时间
+        
+        //把定时事件加入时间轮
 		int ret = AddTimeout( co_get_curr_thread_env()->pEpoll->pTimeout,&psi->timeout,now );
 		if( ret != 0 )
 		{
@@ -1247,10 +1305,18 @@ int co_cond_timedwait( stCoCond_t *link,int ms )
 			return ret;
 		}
 	}
+
+    //把条件变量加入到链表中
 	AddTail( link, psi);
 
-	co_yield_ct();
 
+    printf("退出当前协程\n");
+    //退出执行当前协程
+	co_yield_ct();
+    
+    //---------------执行分割线----------------
+
+    //当协程再次执行时,会移走条件变量
 	RemoveFromLink<stCoCondItem_t,stCoCond_t>( psi );
 	free(psi);
 
