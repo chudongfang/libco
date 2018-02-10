@@ -746,8 +746,6 @@ struct stPoll_t : public stTimeoutItem_t
 	int iEpollFd;
 
 	int iRaiseCnt;
-
-
 };
 
 struct stPollItem_t : public stTimeoutItem_t
@@ -1003,10 +1001,14 @@ stCoRoutine_t *GetCurrThreadCo( )
 
 
 
-//得到epoll事件
+//这是一个非常重要的函数
+//功能:
+// 1.其把当前协程块唤醒事件加入时间轮,并进行定时,当其到达时间后便,唤醒本协程
+// 2.其也提供了socket的监听功能,epoll
 //其供co_poll/poll调用
 //其内部调用epoll监听
-//
+
+
 typedef int (*poll_pfn_t)(struct pollfd fds[], nfds_t nfds, int timeout);
 int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeout, poll_pfn_t pollfunc)
 {
@@ -1106,7 +1108,9 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 		co_yield_env( co_get_curr_thread_env() );
 		iRaiseCnt = arg.iRaiseCnt;
 	}
-
+    
+    //在当前协程被重新唤醒后,说明定时已经到时,此时对epoll进行复原处理
+    //清空epoll的状态
     {
 		//clear epoll status and memory
 		RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( &arg );
@@ -1209,6 +1213,7 @@ stCoRoutine_t *co_self()
 	return GetCurrThreadCo();
 }
 
+//-----------------------------------------------------------------------
 //co cond
 //
 //条件变量
