@@ -40,7 +40,7 @@ struct stCoRoutineAttr_t
 		stack_size = 128 * 1024;
 		share_stack = NULL;
 	}
-}__attribute__ ((packed));
+}__attribute__ ((packed));//取消对齐优化,可以节省空间
 
 struct stCoEpoll_t;
 typedef int (*pfn_co_eventloop_t)(void *);
