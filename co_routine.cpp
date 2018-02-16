@@ -936,6 +936,8 @@ void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 
 			lp = active->head;
 		}
+
+        //执行在EventLoop中执行的函数
 		if( pfn )
 		{
 			if( -1 == pfn( arg ) )
