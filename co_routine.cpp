@@ -1025,7 +1025,7 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 		timeout = INT_MAX;
 	}
 	int epfd = ctx->iEpollFd;
-
+    :q
     //当前的协程块
 	stCoRoutine_t* self = co_self();
 
