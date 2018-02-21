@@ -1103,9 +1103,9 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
     else
 	{
         //成功加入时间轮后,其就会退出当期协程
-        printf("-----------------------------------------------\n");
-        printf("Poll 定时事件已经加入时间轮 , 将要退出本协程!\n");
-        printf("-----------------------------------------------\n\n\n");
+       // printf("-----------------------------------------------\n");
+       // printf("Poll 定时事件已经加入时间轮 , 将要退出本协程!\n");
+       // printf("-----------------------------------------------\n\n\n");
 		co_yield_env( co_get_curr_thread_env() );
 		iRaiseCnt = arg.iRaiseCnt;
 	}
