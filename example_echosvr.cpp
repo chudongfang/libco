@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <iostream>
 
 #ifdef __FreeBSD__
 #include <cstring>
@@ -50,6 +51,8 @@ struct task_t
 
 static stack<task_t*> g_readwrite;
 static int g_listen_fd = -1;
+
+//设置socket非阻塞
 static int SetNonBlock(int iSock)
 {
     int iFlags;
@@ -61,6 +64,7 @@ static int SetNonBlock(int iSock)
     return ret;
 }
 
+
 static void *readwrite_routine( void *arg )
 {
 
@@ -70,13 +74,14 @@ static void *readwrite_routine( void *arg )
 	char buf[ 1024 * 16 ];
 	for(;;)
 	{
+        //如果fd为-1 则退出本协程
 		if( -1 == co->fd )
 		{
 			g_readwrite.push( co );
 			co_yield_ct();
 			continue;
 		}
-
+        
 		int fd = co->fd;
 		co->fd = -1;
 
@@ -88,8 +93,10 @@ static void *readwrite_routine( void *arg )
 			co_poll( co_get_epoll_ct(),&pf,1,1000);
 
 			int ret = read( fd,buf,sizeof(buf) );
-			if( ret > 0 )
+            if( ret > 0 )
 			{
+                std::cout<<__FUNCTION__<<__LINE__<<"ret : "<<ret<<std::endl;
+                std::cout<<__FUNCTION__<<__LINE__<<"message :: "<<buf<<std::endl;
 				ret = write( fd,buf,ret );
 			}
 			if( ret <= 0 )
@@ -105,6 +112,8 @@ static void *readwrite_routine( void *arg )
 	}
 	return 0;
 }
+
+
 int co_accept(int fd, struct sockaddr *addr, socklen_t *len );
 static void *accept_routine( void * )
 {
@@ -113,7 +122,10 @@ static void *accept_routine( void * )
 	fflush(stdout);
 	for(;;)
 	{
+        //其实质是不断的等待，不断的accept,accept不成功则继续等待，
+        //如果得到连接，则通知读写协程进行读写
 		//printf("pid %ld g_readwrite.size %ld\n",getpid(),g_readwrite.size());
+        //没有读写Socket
 		if( g_readwrite.empty() )
 		{
 			printf("empty\n"); //sleep
@@ -129,6 +141,7 @@ static void *accept_routine( void * )
 		socklen_t len = sizeof(addr);
 
 		int fd = co_accept(g_listen_fd, (struct sockaddr *)&addr, &len);
+        //如果accept没有回应，则
 		if( fd < 0 )
 		{
 			struct pollfd pf = { 0 };
@@ -143,6 +156,8 @@ static void *accept_routine( void * )
 			continue;
 		}
 		SetNonBlock( fd );
+        std::cout<<__FUNCTION__<<" a New Connection !"<<std::endl; 
+        //accept完后启动其他协程
 		task_t *co = g_readwrite.top();
 		co->fd = fd;
 		g_readwrite.pop();
@@ -206,6 +221,8 @@ int main(int argc,char *argv[])
                "example_echosvr [IP] [PORT] [TASK_COUNT] [PROCESS_COUNT] -d   # daemonize mode\n");
 		return -1;
 	}
+
+    //Create listenfd in server---
 	const char *ip = argv[1];
 	int port = atoi( argv[2] );
 	int cnt = atoi( argv[3] );
@@ -222,6 +239,7 @@ int main(int argc,char *argv[])
 
 	SetNonBlock( g_listen_fd );
 
+
 	for(int k=0;k<proccnt;k++)
 	{
 
@@ -234,6 +252,8 @@ int main(int argc,char *argv[])
 		{
 			break;
 		}
+
+        //在每个进程中创建协程
 		for(int i=0;i<cnt;i++)
 		{
 			task_t * task = (task_t*)calloc( 1,sizeof(task_t) );
