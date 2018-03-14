@@ -97,7 +97,6 @@ void AddFailCnt()
 		iFailCnt++;
 	}
 }
-
 static void *readwrite_routine( void *arg )
 {
 

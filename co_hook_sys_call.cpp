@@ -25,7 +25,6 @@
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
-
 #include <netinet/in.h>
 #include <errno.h>
 #include <time.h>
@@ -330,7 +329,6 @@ int close(int fd)
 ssize_t read( int fd, void *buf, size_t nbyte )
 {
 	HOOK_SYS_FUNC( read );
-	
 	if( !co_is_enable_sys_hook() )
 	{
 		return g_sys_read_func( fd,buf,nbyte );
